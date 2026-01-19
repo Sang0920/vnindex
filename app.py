@@ -47,12 +47,12 @@ st.markdown("""
     /* Main container optimization for 20:9 */
     .main .block-container {
         max-width: 100%;
-        padding: 0.5rem 1rem;
+        padding: 1rem 3rem;
     }
     
     /* Title styling */
     .main-title {
-        font-size: 1.5rem;
+        font-size: 1.8rem;
         font-weight: 800;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
         -webkit-background-clip: text;
@@ -64,10 +64,10 @@ st.markdown("""
     }
     
     .subtitle {
-        font-size: 0.7rem;
-        color: rgba(255, 255, 255, 0.5);
+        font-size: 0.8rem;
+        color: rgba(255, 255, 255, 0.6);
         text-align: center;
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.8rem;
         font-weight: 300;
     }
     
@@ -76,12 +76,10 @@ st.markdown("""
         background: rgba(255, 255, 255, 0.03);
         backdrop-filter: blur(20px);
         border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 12px;
-        padding: 0.8rem;
+        border-radius: 16px;
+        padding: 1.2rem;
         text-align: center;
-        box-shadow: 
-            0 8px 32px rgba(0, 0, 0, 0.3),
-            inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
     }
     
     .ticker-card:hover {
@@ -92,45 +90,46 @@ st.markdown("""
     }
     
     .ticker-symbol {
-        font-size: 2.5rem;
+        font-size: 3rem;
         font-weight: 800;
         background: linear-gradient(135deg, #38ef7d 0%, #11998e 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
         letter-spacing: -0.03em;
-        margin-bottom: 0;
+        margin-bottom: 0.2rem;
     }
     
     .company-name {
-        font-size: 0.85rem;
+        font-size: 1rem;
         color: rgba(255, 255, 255, 0.8);
         font-weight: 500;
-        margin-bottom: 0.3rem;
+        margin-bottom: 0.5rem;
     }
     
     .sector-badge {
         display: inline-block;
-        padding: 0.2rem 0.6rem;
+        padding: 0.5rem 1.5rem;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         border-radius: 50px;
-        font-size: 0.65rem;
+        font-size: 0.9rem;
         font-weight: 500;
         color: white;
-        margin-bottom: 0.5rem;
+        margin-bottom: 2rem;
     }
     
     /* TradingView link button */
     .tv-link {
         display: inline-block;
-        padding: 0.5rem 1.5rem;
+        padding: 1rem 3rem;
         background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
         border-radius: 50px;
-        font-size: 0.85rem;
+        font-size: 1.1rem;
         font-weight: 600;
         color: white;
         text-decoration: none;
-        box-shadow: 0 4px 15px rgba(56, 239, 125, 0.3);
+        box-shadow: 0 4px 20px rgba(56, 239, 125, 0.3);
+        transition: all 0.3s ease;
     }
     
     .tv-link:hover {
@@ -638,22 +637,18 @@ def main():
             perf_6m_sign = "+" if perf_6m and perf_6m > 0 else ""
             perf_6m_display = f"{perf_6m_sign}{perf_6m:.2f}%" if perf_6m else "N/A"
             
-            # Header card with ticker info, 6M performance, and link - ULTRA COMPACT horizontal layout
+            # Header card with ticker info, 6M performance, and link - compact for mobile
             header_html = f"""
             <div class="ticker-card">
-                <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
-                    <div style="text-align: left;">
-                        <div style="font-size: 2rem; font-weight: 800; background: linear-gradient(135deg, #38ef7d 0%, #11998e 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">{ticker_symbol}</div>
-                        <div style="font-size: 0.75rem; color: rgba(255,255,255,0.7);">{name}</div>
-                        <div style="display: inline-block; padding: 0.15rem 0.5rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 50px; font-size: 0.6rem; color: white; margin-top: 0.2rem;">{sector}</div>
-                    </div>
-                    <div style="text-align: center; padding: 0.5rem; background: linear-gradient(135deg, rgba(102,126,234,0.2) 0%, rgba(118,75,162,0.2) 100%); border-radius: 10px; border: 2px solid {perf_6m_color}; min-width: 90px;">
-                        <div style="color: rgba(255,255,255,0.5); font-size: 0.55rem; text-transform: uppercase;">6M Perf</div>
-                        <div style="color: {perf_6m_color}; font-size: 1.4rem; font-weight: 800;">{perf_6m_display}</div>
-                    </div>
+                <div class="ticker-symbol">{ticker_symbol}</div>
+                <div class="company-name">{name}</div>
+                <div class="sector-badge">{sector}</div>
+                <div style="margin: 0.8rem 0; padding: 0.6rem; background: linear-gradient(135deg, rgba(102,126,234,0.15) 0%, rgba(118,75,162,0.15) 100%); border-radius: 12px; border: 2px solid {perf_6m_color};">
+                    <div style="color: rgba(255,255,255,0.6); font-size: 0.7rem; text-transform: uppercase;">⭐ 6-Month Performance</div>
+                    <div style="color: {perf_6m_color}; font-size: 2rem; font-weight: 800;">{perf_6m_display}</div>
                 </div>
-                <a href="{tv_url}" target="_blank" class="tv-link" style="margin-top: 0.6rem; display: inline-block;">
-                    📈 TradingView
+                <a href="{tv_url}" target="_blank" class="tv-link" style="padding: 0.6rem 1.5rem; font-size: 0.9rem;">
+                    📈 View on TradingView
                 </a>
             </div>
             """
