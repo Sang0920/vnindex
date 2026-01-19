@@ -1,10 +1,12 @@
 """
 VNINDEX Random Ticker Selector
 A Streamlit app optimized for 20:9 screen aspect ratio
+With advanced quantitative scoring and animations
 """
 
 import streamlit as st
 import random
+import time
 from tradingview_screener import Query, col
 
 # Page configuration - optimized for 20:9 aspect ratio
@@ -232,6 +234,95 @@ st.markdown("""
     .stSpinner > div {
         border-top-color: #667eea !important;
     }
+    
+    /* Slot machine animation */
+    @keyframes slotSpin {
+        0% { transform: translateY(0); }
+        25% { transform: translateY(-100%); }
+        50% { transform: translateY(-200%); }
+        75% { transform: translateY(-100%); }
+        100% { transform: translateY(0); }
+    }
+    
+    .slot-machine {
+        animation: slotSpin 0.5s ease-in-out;
+    }
+    
+    /* Confetti animation */
+    @keyframes confetti-fall {
+        0% { transform: translateY(-100vh) rotate(0deg); opacity: 1; }
+        100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+    }
+    
+    .confetti {
+        position: fixed;
+        width: 10px;
+        height: 10px;
+        top: 0;
+        animation: confetti-fall 3s ease-out forwards;
+        z-index: 1000;
+    }
+    
+    /* Score gauge */
+    .score-gauge {
+        width: 100%;
+        height: 8px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 4px;
+        overflow: hidden;
+        margin-top: 0.5rem;
+    }
+    
+    .score-fill {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 1s ease-out;
+    }
+    
+    /* 52-week position bar */
+    .position-bar {
+        width: 100%;
+        height: 12px;
+        background: linear-gradient(90deg, #f5576c 0%, #ffd700 50%, #38ef7d 100%);
+        border-radius: 6px;
+        position: relative;
+        margin: 1rem 0;
+    }
+    
+    .position-marker {
+        position: absolute;
+        top: -4px;
+        width: 20px;
+        height: 20px;
+        background: white;
+        border-radius: 50%;
+        transform: translateX(-50%);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    
+    /* Score card */
+    .score-card {
+        background: linear-gradient(135deg, rgba(102,126,234,0.15) 0%, rgba(118,75,162,0.15) 100%);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 16px;
+        padding: 1.5rem;
+        text-align: center;
+    }
+    
+    .score-value {
+        font-size: 2.5rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    
+    .score-label {
+        font-size: 0.9rem;
+        color: rgba(255,255,255,0.6);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -287,6 +378,115 @@ def format_number(num):
         return f"{num:.0f}"
 
 
+def calculate_momentum_score(ticker_data):
+    """
+    Calculate momentum score based on weighted performance metrics.
+    Weights: 6M = 40%, 3M = 25%, 1M = 20%, 1W = 15%
+    Returns score from 0-100
+    """
+    weights = {
+        'Perf.6M': 0.40,
+        'Perf.3M': 0.25,
+        'Perf.1M': 0.20,
+        'Perf.W': 0.15,
+    }
+    
+    weighted_sum = 0
+    total_weight = 0
+    
+    for key, weight in weights.items():
+        val = safe_get(ticker_data, key)
+        if val is not None and val == val:  # Not NaN
+            # Normalize: +50% = 100 score, -50% = 0 score
+            normalized = max(0, min(100, (val + 50) * 1))
+            weighted_sum += normalized * weight
+            total_weight += weight
+    
+    if total_weight > 0:
+        return weighted_sum / total_weight
+    return 50  # Neutral
+
+
+def calculate_value_score(ticker_data):
+    """
+    Calculate value score based on P/E ratio and dividend yield.
+    Lower P/E and higher yield = higher score
+    Returns score from 0-100
+    """
+    pe = safe_get(ticker_data, 'price_earnings_ttm')
+    div_yield = safe_get(ticker_data, 'dividend_yield_recent')
+    
+    # P/E score: Lower is better (P/E of 5 = 100, P/E of 50 = 0)
+    pe_score = 0
+    if pe and pe > 0:
+        pe_score = max(0, min(100, (50 - pe) * 2.22))
+    
+    # Dividend yield score: Higher is better (10% = 100, 0% = 0)
+    div_score = 0
+    if div_yield and div_yield > 0:
+        div_score = min(100, div_yield * 10)
+    
+    # Weighted: 70% P/E, 30% dividend
+    return pe_score * 0.7 + div_score * 0.3
+
+
+def calculate_composite_score(ticker_data):
+    """
+    Calculate composite investment score.
+    60% momentum + 40% value
+    Returns score from 0-100
+    """
+    momentum = calculate_momentum_score(ticker_data)
+    value = calculate_value_score(ticker_data)
+    return momentum * 0.6 + value * 0.4
+
+
+def calculate_52week_position(ticker_data):
+    """
+    Calculate where current price sits in the 52-week range.
+    Returns percentage (0 = at low, 100 = at high)
+    """
+    high = safe_get(ticker_data, 'price_52_week_high')
+    low = safe_get(ticker_data, 'price_52_week_low')
+    current = safe_get(ticker_data, 'close')
+    
+    if high and low and current and high > low:
+        position = (current - low) / (high - low) * 100
+        return max(0, min(100, position))
+    return 50  # Default to middle
+
+
+def generate_confetti_html():
+    """Generate confetti animation HTML for celebration effect"""
+    colors = ['#667eea', '#764ba2', '#38ef7d', '#f093fb', '#ffd700', '#ff6b6b']
+    confetti_pieces = []
+    
+    for i in range(30):
+        color = random.choice(colors)
+        left = random.randint(0, 100)
+        delay = random.uniform(0, 2)
+        size = random.randint(8, 15)
+        confetti_pieces.append(
+            f'<div class="confetti" style="left: {left}%; background: {color}; '
+            f'animation-delay: {delay}s; width: {size}px; height: {size}px; '
+            f'border-radius: {random.choice(["50%", "0%"])}"></div>'
+        )
+    
+    return ''.join(confetti_pieces)
+
+
+def get_score_color(score):
+    """Get color based on score (0-100)"""
+    if score >= 70:
+        return "#38ef7d"  # Green
+    elif score >= 50:
+        return "#ffd700"  # Gold
+    elif score >= 30:
+        return "#f093fb"  # Pink
+    else:
+        return "#f5576c"  # Red
+
+
 def format_percent(num):
     """Format percentage with + sign for positive values and color class"""
     if num is None or num != num:  # Check for None or NaN
@@ -307,7 +507,7 @@ def safe_get(data, key, default=0):
 def main():
     # Title section
     st.markdown('<h1 class="main-title">🎲 VNINDEX Random Picker</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">Discover your next investment opportunity</p>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Discover your next investment opportunity with AI-powered scoring</p>', unsafe_allow_html=True)
     
     # Load stock data
     with st.spinner("Loading VNINDEX stocks..."):
@@ -317,10 +517,61 @@ def main():
         st.error("Could not load stock data. Please try again later.")
         return
     
-    # Initialize session state for selected ticker
+    # Sidebar for smart filtering
+    with st.sidebar:
+        st.markdown("## 🎯 Smart Filters")
+        
+        # Sector filter
+        sectors = ['All Sectors'] + sorted(df['sector'].dropna().unique().tolist())
+        selected_sector = st.selectbox("📁 Sector", sectors)
+        
+        # Market cap filter
+        st.markdown("💰 Market Cap Range")
+        min_cap, max_cap = st.slider(
+            "Market Cap (Trillion VND)",
+            min_value=0.0,
+            max_value=500.0,
+            value=(0.0, 500.0),
+            step=10.0
+        )
+        
+        # Hot stocks filter
+        hot_stocks_only = st.checkbox("🔥 Hot Stocks Only (Positive 6M)", value=False)
+        
+        # Lucky pick mode
+        lucky_mode = st.checkbox("🍀 Lucky Mode (Favor High Momentum)", value=False)
+        
+        st.markdown("---")
+        st.markdown("### 📊 Dataset Info")
+        st.markdown(f"**Total Stocks:** {len(df)}")
+    
+    # Apply filters
+    filtered_df = df.copy()
+    
+    if selected_sector != 'All Sectors':
+        filtered_df = filtered_df[filtered_df['sector'] == selected_sector]
+    
+    # Market cap filter (convert to trillion VND)
+    if 'market_cap_basic' in filtered_df.columns:
+        filtered_df = filtered_df[
+            (filtered_df['market_cap_basic'].fillna(0) >= min_cap * 1e12) &
+            (filtered_df['market_cap_basic'].fillna(0) <= max_cap * 1e12)
+        ]
+    
+    if hot_stocks_only and 'Perf.6M' in filtered_df.columns:
+        filtered_df = filtered_df[filtered_df['Perf.6M'].fillna(0) > 0]
+    
+    # Update sidebar with filtered count
+    with st.sidebar:
+        st.markdown(f"**Filtered Stocks:** {len(filtered_df)}")
+    
+    # Initialize session state for selected ticker and animation
     if 'selected_ticker' not in st.session_state:
         st.session_state.selected_ticker = None
-        st.session_state.selected_data = None
+    if 'show_confetti' not in st.session_state:
+        st.session_state.show_confetti = False
+    if 'animation_key' not in st.session_state:
+        st.session_state.animation_key = 0
     
     # Create horizontal layout for 20:9 optimization
     col_left, col_center, col_right = st.columns([1, 2, 1])
@@ -328,8 +579,24 @@ def main():
     with col_center:
         # Random pick button
         if st.button("🎲 Pick Random Ticker", use_container_width=True):
-            random_idx = random.randint(0, len(df) - 1)
-            st.session_state.selected_ticker = df.iloc[random_idx]
+            if len(filtered_df) > 0:
+                if lucky_mode and 'Perf.6M' in filtered_df.columns:
+                    # Weighted random selection favoring high momentum
+                    momentum_scores = filtered_df['Perf.6M'].fillna(0) + 100  # Shift to positive
+                    momentum_scores = momentum_scores.clip(lower=1)  # Ensure positive weights
+                    weights = momentum_scores / momentum_scores.sum()
+                    random_idx = filtered_df.sample(1, weights=weights).index[0]
+                    st.session_state.selected_ticker = filtered_df.loc[random_idx]
+                else:
+                    random_idx = random.randint(0, len(filtered_df) - 1)
+                    st.session_state.selected_ticker = filtered_df.iloc[random_idx]
+                
+                # Check for confetti
+                perf_6m = safe_get(st.session_state.selected_ticker, 'Perf.6M')
+                st.session_state.show_confetti = perf_6m > 0 if perf_6m else False
+                st.session_state.animation_key += 1
+            else:
+                st.warning("No stocks match your filters. Try adjusting the criteria.")
         
         st.markdown("<br>", unsafe_allow_html=True)
         
@@ -443,24 +710,88 @@ def main():
                 st.markdown(f'<div style="text-align: center;"><span style="color: #667eea; font-size: 1.2rem; font-weight: 700;">{format_number(safe_get(ticker_data, "close"))}</span><br><span style="color: rgba(255,255,255,0.5); font-size: 0.7rem; text-transform: uppercase;">Current</span></div>', unsafe_allow_html=True)
             with range_cols[3]:
                 st.markdown(f'<div style="text-align: center;"><span style="color: #38ef7d; font-size: 1.2rem; font-weight: 700;">{format_number(high_52w)}</span><br><span style="color: rgba(255,255,255,0.5); font-size: 0.7rem; text-transform: uppercase;">52W High</span></div>', unsafe_allow_html=True)
+            
+            # 52-Week Position Bar
+            position = calculate_52week_position(ticker_data)
+            st.markdown(f'''
+            <div style="margin: 1.5rem 0;">
+                <p style="color: rgba(255,255,255,0.6); text-align: center; font-weight: 500; margin-bottom: 0.5rem;">📍 52-Week Position: {position:.1f}%</p>
+                <div class="position-bar">
+                    <div class="position-marker" style="left: {position}%;"></div>
+                </div>
+            </div>
+            ''', unsafe_allow_html=True)
+            
+            # AI Scores Section
+            st.markdown('<p style="color: rgba(255,255,255,0.6); text-align: center; margin-top: 1.5rem; font-weight: 500;">🤖 AI Investment Scores</p>', unsafe_allow_html=True)
+            
+            # Calculate scores
+            momentum_score = calculate_momentum_score(ticker_data)
+            value_score = calculate_value_score(ticker_data)
+            composite_score = calculate_composite_score(ticker_data)
+            
+            score_cols = st.columns(3)
+            
+            with score_cols[0]:
+                color = get_score_color(momentum_score)
+                st.markdown(f'''
+                <div class="score-card">
+                    <div class="score-value" style="background: linear-gradient(135deg, {color} 0%, {color}aa 100%); -webkit-background-clip: text;">{momentum_score:.0f}</div>
+                    <div class="score-label">Momentum Score</div>
+                    <div class="score-gauge">
+                        <div class="score-fill" style="width: {momentum_score}%; background: {color};"></div>
+                    </div>
+                    <div style="color: rgba(255,255,255,0.4); font-size: 0.7rem; margin-top: 0.5rem;">6M=40% | 3M=25% | 1M=20% | 1W=15%</div>
+                </div>
+                ''', unsafe_allow_html=True)
+            
+            with score_cols[1]:
+                color = get_score_color(value_score)
+                st.markdown(f'''
+                <div class="score-card">
+                    <div class="score-value" style="background: linear-gradient(135deg, {color} 0%, {color}aa 100%); -webkit-background-clip: text;">{value_score:.0f}</div>
+                    <div class="score-label">Value Score</div>
+                    <div class="score-gauge">
+                        <div class="score-fill" style="width: {value_score}%; background: {color};"></div>
+                    </div>
+                    <div style="color: rgba(255,255,255,0.4); font-size: 0.7rem; margin-top: 0.5rem;">P/E=70% | Dividend=30%</div>
+                </div>
+                ''', unsafe_allow_html=True)
+            
+            with score_cols[2]:
+                color = get_score_color(composite_score)
+                st.markdown(f'''
+                <div class="score-card">
+                    <div class="score-value" style="background: linear-gradient(135deg, {color} 0%, {color}aa 100%); -webkit-background-clip: text;">{composite_score:.0f}</div>
+                    <div class="score-label">⭐ Investment Score</div>
+                    <div class="score-gauge">
+                        <div class="score-fill" style="width: {composite_score}%; background: {color};"></div>
+                    </div>
+                    <div style="color: rgba(255,255,255,0.4); font-size: 0.7rem; margin-top: 0.5rem;">Momentum=60% | Value=40%</div>
+                </div>
+                ''', unsafe_allow_html=True)
+            
+            # Confetti for positive 6M performance
+            if st.session_state.show_confetti:
+                st.markdown(generate_confetti_html(), unsafe_allow_html=True)
 
         else:
             # Empty state
-            st.markdown("""
+            st.markdown(f"""
             <div class="ticker-card">
                 <div style="font-size: 4rem; margin-bottom: 1rem;">🎯</div>
                 <div class="company-name">Click the button above to pick a random stock</div>
                 <div style="color: rgba(255,255,255,0.5); font-size: 0.9rem;">
-                    From {count} stocks on VNINDEX
+                    From {len(filtered_df)} filtered stocks ({len(df)} total on VNINDEX)
                 </div>
             </div>
-            """.format(count=len(df)), unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
     
     # Footer with stock count
     st.markdown("<br><br>", unsafe_allow_html=True)
     st.markdown(
         f'<p style="text-align: center; color: rgba(255,255,255,0.4); font-size: 0.85rem;">'
-        f'📊 Total stocks available: {len(df)} | Data refreshes every 5 minutes</p>',
+        f'📊 Showing {len(filtered_df)} of {len(df)} stocks | 🤖 AI Scoring Enabled | Data refreshes every 5 minutes</p>',
         unsafe_allow_html=True
     )
 
