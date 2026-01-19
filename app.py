@@ -149,26 +149,49 @@ st.markdown("""
     .stats-container {
         display: flex;
         justify-content: center;
-        gap: 3rem;
+        gap: 2rem;
         margin-top: 2rem;
         flex-wrap: wrap;
     }
     
     .stat-item {
         text-align: center;
+        min-width: 80px;
     }
     
     .stat-value {
-        font-size: 1.5rem;
+        font-size: 1.3rem;
         font-weight: 700;
         color: #667eea;
     }
     
+    .stat-value.positive {
+        color: #38ef7d;
+    }
+    
+    .stat-value.negative {
+        color: #f5576c;
+    }
+    
     .stat-label {
-        font-size: 0.8rem;
+        font-size: 0.75rem;
         color: rgba(255, 255, 255, 0.5);
         text-transform: uppercase;
-        letter-spacing: 0.1em;
+        letter-spacing: 0.05em;
+    }
+    
+    /* Performance section */
+    .perf-section {
+        margin-top: 1.5rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .perf-title {
+        font-size: 0.9rem;
+        color: rgba(255, 255, 255, 0.6);
+        margin-bottom: 1rem;
+        font-weight: 500;
     }
     
     /* Button styling */
@@ -219,7 +242,24 @@ def get_vnindex_stocks():
     try:
         query = (Query()
                  .set_markets('vietnam')
-                 .select('name', 'close', 'volume', 'market_cap_basic', 'price_earnings_ttm', 'sector')
+                 .select(
+                     'name', 'close', 'volume', 'market_cap_basic', 'price_earnings_ttm', 'sector',
+                     # Performance metrics
+                     'change',           # Daily change %
+                     'Perf.W',           # Weekly performance
+                     'Perf.1M',          # 1-month performance
+                     'Perf.3M',          # 3-month performance  
+                     'Perf.6M',          # 6-month performance
+                     'Perf.Y',           # 1-year performance
+                     'Perf.YTD',         # Year-to-date performance
+                     # Additional metrics
+                     'dividend_yield_recent',  # Dividend yield
+                     'earnings_per_share_basic_ttm',  # EPS
+                     'price_52_week_high',  # 52-week high
+                     'price_52_week_low',   # 52-week low
+                     'beta_1_year',         # Beta
+                     'average_volume_10d_calc',  # 10-day avg volume
+                 )
                  .where(col('exchange') == 'HOSE')
                  .limit(9999)
                  .get_scanner_data())
@@ -245,6 +285,23 @@ def format_number(num):
         return f"{num/1e3:.1f}K"
     else:
         return f"{num:.0f}"
+
+
+def format_percent(num):
+    """Format percentage with + sign for positive values and color class"""
+    if num is None or num != num:  # Check for None or NaN
+        return "N/A", ""
+    sign = "+" if num >= 0 else ""
+    color_class = "positive" if num >= 0 else "negative"
+    return f"{sign}{num:.2f}%", color_class
+
+
+def safe_get(data, key, default=0):
+    """Safely get a value from series, handling NaN"""
+    val = data.get(key, default)
+    if val is None or (isinstance(val, float) and val != val):
+        return default
+    return val
 
 
 def main():
@@ -291,7 +348,33 @@ def main():
             sector = ticker_data.get('sector', 'N/A') if ticker_data.get('sector') else 'N/A'
             name = ticker_data.get('name', ticker_symbol)
             
-            ticker_html = f"""
+            # Format performance metrics
+            change_val, change_class = format_percent(safe_get(ticker_data, 'change'))
+            perf_w_val, perf_w_class = format_percent(safe_get(ticker_data, 'Perf.W'))
+            perf_1m_val, perf_1m_class = format_percent(safe_get(ticker_data, 'Perf.1M'))
+            perf_3m_val, perf_3m_class = format_percent(safe_get(ticker_data, 'Perf.3M'))
+            perf_6m_val, perf_6m_class = format_percent(safe_get(ticker_data, 'Perf.6M'))
+            perf_y_val, perf_y_class = format_percent(safe_get(ticker_data, 'Perf.Y'))
+            perf_ytd_val, perf_ytd_class = format_percent(safe_get(ticker_data, 'Perf.YTD'))
+            
+            # Format other metrics
+            pe_ratio = safe_get(ticker_data, 'price_earnings_ttm')
+            pe_display = f"{pe_ratio:.1f}x" if pe_ratio else "N/A"
+            
+            div_yield = safe_get(ticker_data, 'dividend_yield_recent')
+            div_display = f"{div_yield:.2f}%" if div_yield else "N/A"
+            
+            eps = safe_get(ticker_data, 'earnings_per_share_basic_ttm')
+            eps_display = format_number(eps) if eps else "N/A"
+            
+            high_52w = safe_get(ticker_data, 'price_52_week_high')
+            low_52w = safe_get(ticker_data, 'price_52_week_low')
+            
+            beta = safe_get(ticker_data, 'beta_1_year')
+            beta_display = f"{beta:.2f}" if beta else "N/A"
+            
+            # Header card with ticker info and link
+            header_html = f"""
             <div class="ticker-card">
                 <div class="ticker-symbol">{ticker_symbol}</div>
                 <div class="company-name">{name}</div>
@@ -300,27 +383,67 @@ def main():
                 <a href="{tv_url}" target="_blank" class="tv-link">
                     📈 View on TradingView
                 </a>
-                <div class="stats-container">
-                    <div class="stat-item">
-                        <div class="stat-value">{format_number(ticker_data.get('close', 0)):}</div>
-                        <div class="stat-label">Price (VND)</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-value">{format_number(ticker_data.get('volume', 0))}</div>
-                        <div class="stat-label">Volume</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-value">{format_number(ticker_data.get('market_cap_basic', 0))}</div>
-                        <div class="stat-label">Market Cap</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-value">{ticker_data.get('price_earnings_ttm', 0):.1f}x</div>
-                        <div class="stat-label">P/E Ratio</div>
-                    </div>
-                </div>
             </div>
             """
-            st.markdown(ticker_html, unsafe_allow_html=True)
+            st.markdown(header_html, unsafe_allow_html=True)
+            
+            # Performance metrics using Streamlit columns
+            st.markdown('<p style="color: rgba(255,255,255,0.6); text-align: center; margin-top: 1.5rem; font-weight: 500;">📊 Performance</p>', unsafe_allow_html=True)
+            perf_cols = st.columns(7)
+            
+            perf_data = [
+                ("Today", change_val, change_class),
+                ("1 Week", perf_w_val, perf_w_class),
+                ("1 Month", perf_1m_val, perf_1m_class),
+                ("3 Months", perf_3m_val, perf_3m_class),
+                ("6 Months", perf_6m_val, perf_6m_class),
+                ("1 Year", perf_y_val, perf_y_class),
+                ("YTD", perf_ytd_val, perf_ytd_class),
+            ]
+            
+            for i, (label, value, color_class) in enumerate(perf_data):
+                with perf_cols[i]:
+                    color = "#38ef7d" if color_class == "positive" else "#f5576c" if color_class == "negative" else "#667eea"
+                    # Highlight 6 Months (index 4) with special styling
+                    if i == 4:  # 6 Months
+                        st.markdown(f'''
+                        <div style="text-align: center; padding: 0.8rem 0.5rem; background: linear-gradient(135deg, rgba(102,126,234,0.2) 0%, rgba(118,75,162,0.2) 100%); border: 2px solid {color}; border-radius: 12px; box-shadow: 0 0 15px {color}40;">
+                            <span style="color: {color}; font-size: 1.6rem; font-weight: 800;">{value}</span><br>
+                            <span style="color: rgba(255,255,255,0.8); font-size: 0.8rem; text-transform: uppercase; font-weight: 600;">⭐ {label}</span>
+                        </div>
+                        ''', unsafe_allow_html=True)
+                    else:
+                        st.markdown(f'<div style="text-align: center;"><span style="color: {color}; font-size: 1.2rem; font-weight: 700;">{value}</span><br><span style="color: rgba(255,255,255,0.5); font-size: 0.7rem; text-transform: uppercase;">{label}</span></div>', unsafe_allow_html=True)
+            
+            # Key metrics
+            st.markdown('<p style="color: rgba(255,255,255,0.6); text-align: center; margin-top: 1.5rem; font-weight: 500;">📈 Key Metrics</p>', unsafe_allow_html=True)
+            metric_cols = st.columns(7)
+            
+            metrics_data = [
+                ("Price (VND)", format_number(safe_get(ticker_data, 'close'))),
+                ("Volume", format_number(safe_get(ticker_data, 'volume'))),
+                ("Market Cap", format_number(safe_get(ticker_data, 'market_cap_basic'))),
+                ("P/E Ratio", pe_display),
+                ("EPS (TTM)", eps_display),
+                ("Div Yield", div_display),
+                ("Beta", beta_display),
+            ]
+            
+            for i, (label, value) in enumerate(metrics_data):
+                with metric_cols[i]:
+                    st.markdown(f'<div style="text-align: center;"><span style="color: #667eea; font-size: 1.2rem; font-weight: 700;">{value}</span><br><span style="color: rgba(255,255,255,0.5); font-size: 0.7rem; text-transform: uppercase;">{label}</span></div>', unsafe_allow_html=True)
+            
+            # 52-Week Range
+            st.markdown('<p style="color: rgba(255,255,255,0.6); text-align: center; margin-top: 1.5rem; font-weight: 500;">📉 52-Week Range</p>', unsafe_allow_html=True)
+            range_cols = st.columns([1, 1, 1, 1, 1])
+            
+            with range_cols[1]:
+                st.markdown(f'<div style="text-align: center;"><span style="color: #f5576c; font-size: 1.2rem; font-weight: 700;">{format_number(low_52w)}</span><br><span style="color: rgba(255,255,255,0.5); font-size: 0.7rem; text-transform: uppercase;">52W Low</span></div>', unsafe_allow_html=True)
+            with range_cols[2]:
+                st.markdown(f'<div style="text-align: center;"><span style="color: #667eea; font-size: 1.2rem; font-weight: 700;">{format_number(safe_get(ticker_data, "close"))}</span><br><span style="color: rgba(255,255,255,0.5); font-size: 0.7rem; text-transform: uppercase;">Current</span></div>', unsafe_allow_html=True)
+            with range_cols[3]:
+                st.markdown(f'<div style="text-align: center;"><span style="color: #38ef7d; font-size: 1.2rem; font-weight: 700;">{format_number(high_52w)}</span><br><span style="color: rgba(255,255,255,0.5); font-size: 0.7rem; text-transform: uppercase;">52W High</span></div>', unsafe_allow_html=True)
+
         else:
             # Empty state
             st.markdown("""
