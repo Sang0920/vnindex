@@ -314,6 +314,17 @@ st.markdown("""
         text-transform: uppercase;
         letter-spacing: 0.1em;
     }
+    
+    /* Mobile optimization */
+    @media (max-width: 768px) {
+        .main-title {
+            font-size: 1.5rem !important;
+            margin-bottom: 0.2rem !important;
+        }
+        .subtitle {
+            display: none !important;
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
 
