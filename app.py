@@ -226,33 +226,29 @@ def main():
         volume = safe_get(ticker_data, 'volume')
         market_cap = safe_get(ticker_data, 'market_cap_basic')
         
-        # Ticker card
+        # Ticker card header
         st.markdown(f"""
         <div class="ticker-card">
             <div class="ticker-symbol">{ticker_symbol}</div>
             <div class="company-name">{name}</div>
             <div class="sector-badge">{sector}</div>
-            
-            <div style="margin: 1.5rem 0;">
-                <div style="display: flex; justify-content: space-around; gap: 1rem; flex-wrap: wrap;">
-                    <div style="text-align: center; padding: 0.8rem; background: rgba(255, 255, 255, 0.03); border-radius: 8px; flex: 1; min-width: 100px;">
-                        <div style="font-size: 1.3rem; font-weight: bold; color: #667eea;">{format_number(price)}</div>
-                        <div style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.6); text-transform: uppercase; margin-top: 0.3rem;">Price (VND)</div>
-                    </div>
-                    <div style="text-align: center; padding: 0.8rem; background: rgba(255, 255, 255, 0.03); border-radius: 8px; flex: 1; min-width: 100px;">
-                        <div style="font-size: 1.3rem; font-weight: bold; color: #667eea;">{format_number(volume)}</div>
-                        <div style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.6); text-transform: uppercase; margin-top: 0.3rem;">Volume</div>
-                    </div>
-                    <div style="text-align: center; padding: 0.8rem; background: rgba(255, 255, 255, 0.03); border-radius: 8px; flex: 1; min-width: 100px;">
-                        <div style="font-size: 1.3rem; font-weight: bold; color: #667eea;">{format_number(market_cap)}</div>
-                        <div style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.6); text-transform: uppercase; margin-top: 0.3rem;">Market Cap</div>
-                    </div>
-                </div>
-            </div>
-            
-            <a href="{tv_url}" target="_blank" class="tv-button">📈 View on TradingView</a>
         </div>
         """, unsafe_allow_html=True)
+        
+        # Metrics using Streamlit columns
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric("Price (VND)", format_number(price))
+        
+        with col2:
+            st.metric("Volume", format_number(volume))
+        
+        with col3:
+            st.metric("Market Cap", format_number(market_cap))
+        
+        # TradingView button
+        st.markdown(f'<div style="text-align: center; margin-top: 2rem;"><a href="{tv_url}" target="_blank" class="tv-button">📈 View on TradingView</a></div>', unsafe_allow_html=True)
     else:
         # Empty state
         st.markdown(f"""
