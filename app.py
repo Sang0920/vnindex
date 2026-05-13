@@ -149,7 +149,7 @@ def get_vnindex_stocks():
     try:
         query = (Query()
                  .set_markets('vietnam')
-                 .select('ticker', 'name', 'close', 'volume', 'market_cap_basic', 'sector')
+                 .select('name', 'close', 'volume', 'market_cap_basic', 'sector')
                  .where(col('exchange') == 'HOSE')
                  .limit(9999)
                  .get_scanner_data())
@@ -212,12 +212,12 @@ def main():
     if st.session_state.selected_ticker is not None:
         ticker_data = st.session_state.selected_ticker
         
-        # Extract ticker symbol (remove "HOSE:" prefix if present)
-        full_ticker = ticker_data['ticker']
-        ticker_symbol = full_ticker.split(':')[1] if ':' in full_ticker else full_ticker
+        # Get ticker symbol from name or index
+        # TradingView returns data without explicit ticker field, so we use the symbol identifier
+        ticker_symbol = ticker_data.get('symbol', '').split(':')[-1] or ticker_data.get('name', 'UNKNOWN')
         
         # Build TradingView URL
-        tv_url = f"https://www.tradingview.com/symbols/{full_ticker.replace(':', '-')}/?timeframe=6M"
+        tv_url = f"https://www.tradingview.com/symbols/HOSE-{ticker_symbol}/?timeframe=6M"
         
         # Get data
         name = ticker_data.get('name', ticker_symbol)
